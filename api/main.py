@@ -1,32 +1,44 @@
 import os
 import sqlite3
-import base64
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer, util
 import requests
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, List
+import torch
 
+# Load environment variables
 load_dotenv()
 
 DB_PATH = "data/chunks.db"
-MODEL = None  # Lazy load
-
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-class Query(BaseModel):
-    question: str
-    image: Optional[str] = None  # base64 encoded image string (optional)
-
 app = FastAPI()
 
-def search_chunks(query, k=5):
+# Lazy load model
+MODEL = None
+
+# Request schema
+class Query(BaseModel):
+    question: str
+    image: Optional[str] = None
+
+# Response schema
+class QueryResponse(BaseModel):
+    answer: str
+    relevant_links: List[str]
+
+def load_model():
     global MODEL
     if MODEL is None:
         MODEL = SentenceTransformer("all-MiniLM-L6-v2")
 
+def search_chunks(query, k=5):
+    load_model()
+
+    # Load all chunks from database
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, content, source FROM chunks")
@@ -38,11 +50,13 @@ def search_chunks(query, k=5):
     query_embedding = MODEL.encode(query, convert_to_tensor=True)
 
     hits = util.semantic_search(query_embedding, embeddings, top_k=k)[0]
+
     top_chunks = [{
         "id": rows[hit['corpus_id']][0],
         "content": rows[hit['corpus_id']][1],
         "source": rows[hit['corpus_id']][2]
     } for hit in hits]
+
     return top_chunks
 
 def generate_answer_openrouter(query, context_chunks):
@@ -67,11 +81,20 @@ def generate_answer_openrouter(query, context_chunks):
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     except Exception as e:
-        return f"\u274c Failed to get response from GPT: {str(e)}"
+        return f"❌ Failed to get response from GPT: {str(e)}"
 
-@app.post("/query")
+@app.post("/query", response_model=QueryResponse)
 def query_route(query: Query):
     top_chunks = search_chunks(query.question, k=5)
     answer = generate_answer_openrouter(query.question, top_chunks)
     links = list(set(chunk["source"] for chunk in top_chunks))
-    return {"answer": answer, "links": links}
+    return {
+        "answer": answer,
+        "relevant_links": links
+    }
+
+# Local dev run
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("api.main:app", host="0.0.0.0", port=port)
