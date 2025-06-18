@@ -11,7 +11,7 @@ import torch
 # Load environment variables
 load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
-
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins (or restrict if needed)
@@ -25,7 +25,7 @@ DB_PATH = "data/chunks.db"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-app = FastAPI()
+
 
 # Lazy load model
 MODEL = None
