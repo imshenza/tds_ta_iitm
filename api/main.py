@@ -10,6 +10,16 @@ import torch
 
 # Load environment variables
 load_dotenv()
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (or restrict if needed)
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods including OPTIONS
+    allow_headers=["*"],  # Allow all headers
+)
+
 
 DB_PATH = "data/chunks.db"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
