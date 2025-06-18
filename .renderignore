@@ -1,0 +1,5 @@
+venv/
+data/embeddings.db
+data/discourse_posts.json
+data/tds_course/
+scraper/
