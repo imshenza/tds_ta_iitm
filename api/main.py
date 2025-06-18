@@ -11,7 +11,7 @@ from typing import Optional
 load_dotenv()
 
 DB_PATH = "data/chunks.db"
-MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+MODEL = None  # Lazy load
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -23,6 +23,10 @@ class Query(BaseModel):
 app = FastAPI()
 
 def search_chunks(query, k=5):
+    global MODEL
+    if MODEL is None:
+        MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT id, content, source FROM chunks")
@@ -30,8 +34,7 @@ def search_chunks(query, k=5):
     conn.close()
 
     contents = [row[1] for row in rows]
-    embeddings = [MODEL.encode(c, convert_to_tensor=True) for c in contents]
-
+    embeddings = MODEL.encode(contents, convert_to_tensor=True)
     query_embedding = MODEL.encode(query, convert_to_tensor=True)
 
     hits = util.semantic_search(query_embedding, embeddings, top_k=k)[0]
